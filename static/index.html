@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система управления финансами</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Система управления финансами</h1>
+            <nav>
+                <button onclick="showSection('users')">Пользователи</button>
+                <button onclick="showSection('accounts')">Счета</button>
+                <button onclick="showSection('categories')">Категории</button>
+                <button onclick="showSection('transactions')">Транзакции</button>
+                <button onclick="showSection('budgets')">Бюджеты</button>
+                <button onclick="showSection('reports')">Отчеты</button>
+            </nav>
+        </header>
+
+        <main>
+            <section id="users" class="section">
+                <h2>Пользователи</h2>
+                <div class="controls">
+                    <button onclick="showUserForm()">Добавить пользователя</button>
+                </div>
+                <div id="users-list"></div>
+                <div id="user-form" class="form-container" style="display: none;">
+                    <h3>Добавить пользователя</h3>
+                    <form id="userForm">
+                        <input type="text" id="username" placeholder="Имя пользователя" required>
+                        <input type="email" id="email" placeholder="Email" required>
+                        <input type="password" id="password" placeholder="Пароль" required>
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideUserForm()">Отмена</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="accounts" class="section">
+                <h2>Счета</h2>
+                <div class="controls">
+                    <button onclick="showAccountForm()">Добавить счет</button>
+                </div>
+                <div id="accounts-list"></div>
+                <div id="account-form" class="form-container" style="display: none;">
+                    <h3>Добавить счет</h3>
+                    <form id="accountForm">
+                        <input type="text" id="accountName" placeholder="Название счета" required>
+                        <select id="accountType" required>
+                            <option value="">Выберите тип</option>
+                            <option value="cash">Наличные</option>
+                            <option value="card">Карта</option>
+                            <option value="deposit">Депозит</option>
+                        </select>
+                        <input type="number" id="accountBalance" placeholder="Баланс" step="0.01" value="0">
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideAccountForm()">Отмена</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="categories" class="section">
+                <h2>Категории</h2>
+                <div class="controls">
+                    <button onclick="showCategoryForm()">Добавить категорию</button>
+                </div>
+                <div id="categories-list"></div>
+                <div id="category-form" class="form-container" style="display: none;">
+                    <h3>Добавить категорию</h3>
+                    <form id="categoryForm">
+                        <input type="text" id="categoryName" placeholder="Название категории" required>
+                        <select id="categoryType" required>
+                            <option value="">Выберите тип</option>
+                            <option value="income">Доход</option>
+                            <option value="expense">Расход</option>
+                        </select>
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideCategoryForm()">Отмена</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="transactions" class="section">
+                <h2>Транзакции</h2>
+                <div class="controls">
+                    <button onclick="showTransactionForm()">Добавить транзакцию</button>
+                </div>
+                <div id="transactions-list"></div>
+                <div id="transaction-form" class="form-container" style="display: none;">
+                    <h3>Добавить транзакцию</h3>
+                    <form id="transactionForm">
+                        <select id="transactionAccount" required>
+                            <option value="">Выберите счет</option>
+                        </select>
+                        <select id="transactionCategory" required>
+                            <option value="">Выберите категорию</option>
+                        </select>
+                        <input type="number" id="transactionAmount" placeholder="Сумма" step="0.01" required>
+                        <textarea id="transactionDescription" placeholder="Описание"></textarea>
+                        <input type="date" id="transactionDate">
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideTransactionForm()">Отмена</button>
+                    </form>
+                </div>
+                <div id="transaction-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать транзакцию</h3>
+                    <form id="transactionEditForm">
+                        <input type="hidden" id="editTransactionId">
+                        <select id="editTransactionAccount" required>
+                            <option value="">Выберите счет</option>
+                        </select>
+                        <select id="editTransactionCategory" required>
+                            <option value="">Выберите категорию</option>
+                        </select>
+                        <input type="number" id="editTransactionAmount" placeholder="Сумма" step="0.01" required>
+                        <textarea id="editTransactionDescription" placeholder="Описание"></textarea>
+                        <input type="date" id="editTransactionDate">
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideTransactionEdit()">Отмена</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="budgets" class="section">
+                <h2>Бюджеты</h2>
+                <div class="controls">
+                    <button onclick="showBudgetForm()">Добавить бюджет</button>
+                </div>
+                <div id="budgets-list"></div>
+                <div id="budget-form" class="form-container" style="display: none;">
+                    <h3>Добавить бюджет</h3>
+                    <form id="budgetForm">
+                        <select id="budgetCategory" required>
+                            <option value="">Выберите категорию</option>
+                        </select>
+                        <input type="number" id="budgetAmount" placeholder="Лимит бюджета" step="0.01" required>
+                        <input type="date" id="budgetStart" required>
+                        <input type="date" id="budgetEnd" required>
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideBudgetForm()">Отмена</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="reports" class="section">
+                <h2>Отчеты</h2>
+                <div class="controls">
+                    <button onclick="loadTransactionReport()">Отчет по транзакциям</button>
+                    <button onclick="loadCategoryReport()">Отчет по категориям</button>
+                </div>
+                <div id="reports-content"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
