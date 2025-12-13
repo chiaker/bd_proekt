@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
@@ -16,6 +16,11 @@ async def get_accounts(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=AccountResponse)
 async def create_account(account: AccountCreate, db: Session = Depends(get_db)):
+    if account.balance < 0:
+        raise HTTPException(status_code=400, detail="Account balance cannot be negative")
+    if not account.name:
+        raise HTTPException(status_code=400, detail="Account name is required")
+
     db_account = Account(
         user_id=1,
         name=account.name,

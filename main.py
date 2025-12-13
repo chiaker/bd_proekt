@@ -1,7 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException as FastAPIHTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app.routers import users, accounts, categories, transactions, budgets, reports
@@ -10,6 +14,15 @@ from app.routers import users, accounts, categories, transactions, budgets, repo
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Finance Management System")
+
+# CORS for frontend requests (development)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Подключение статических файлов
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -21,6 +34,31 @@ app.include_router(categories.router)
 app.include_router(transactions.router)
 app.include_router(budgets.router)
 app.include_router(reports.router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"message": "Validation error", "details": exc.errors()},
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    # For dev purposes, provide a safe error message; in production, log the details and return a generic message
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal server error"},
+    )
+
+
+@app.exception_handler(FastAPIHTTPException)
+async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail},
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():

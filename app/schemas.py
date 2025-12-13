@@ -10,7 +10,7 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    user_id: int
+    id: int
     username: str
     email: str
     created_at: datetime
@@ -23,7 +23,7 @@ class AccountCreate(BaseModel):
 
 
 class AccountResponse(BaseModel):
-    account_id: int
+    id: int
     user_id: int
     name: str
     type: str
@@ -37,7 +37,7 @@ class CategoryCreate(BaseModel):
 
 
 class CategoryResponse(BaseModel):
-    category_id: int
+    id: int
     user_id: int
     name: str
     type: str
@@ -52,13 +52,29 @@ class TransactionCreate(BaseModel):
 
 
 class TransactionResponse(BaseModel):
-    transaction_id: int
+    id: int
     account_id: int
     category_id: int
     amount: float
     description: Optional[str]
     transaction_date: date
-    created_at: datetime
+
+
+class TransactionBACreate(BaseModel):
+    account_id_from: int
+    account_id_to: int
+    amount: float
+    description: Optional[str] = None
+    transaction_date: Optional[date] = None
+
+
+class TransactionBAResponse(BaseModel):
+    id: int
+    account_id_from: int
+    account_id_to: int
+    amount: float
+    description: Optional[str]
+    transaction_date: date
 
 
 class BudgetCreate(BaseModel):
@@ -69,7 +85,7 @@ class BudgetCreate(BaseModel):
 
 
 class BudgetResponse(BaseModel):
-    budget_id: int
+    id: int
     user_id: int
     category_id: int
     amount_limit: float

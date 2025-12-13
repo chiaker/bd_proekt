@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import Budget
+from app.models import Budget, Category
 from app.schemas import BudgetCreate, BudgetResponse
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
@@ -16,6 +16,14 @@ async def get_budgets(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=BudgetResponse)
 async def create_budget(budget: BudgetCreate, db: Session = Depends(get_db)):
+    # basic validation
+    if budget.amount_limit <= 0:
+        raise HTTPException(status_code=400, detail="Budget amount_limit must be greater than zero")
+    if budget.period_start > budget.period_end:
+        raise HTTPException(status_code=400, detail="Budget period_start must be before period_end")
+    cat = db.query(Category).filter(Category.id == budget.category_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
     db_budget = Budget(
         user_id=1,
         category_id=budget.category_id,

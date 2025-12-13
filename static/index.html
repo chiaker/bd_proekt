@@ -28,7 +28,6 @@
                 <div class="controls">
                     <button onclick="showUserForm()">Добавить пользователя</button>
                 </div>
-                <div id="users-list"></div>
                 <div id="user-form" class="form-container" style="display: none;">
                     <h3>Добавить пользователя</h3>
                     <form id="userForm">
@@ -39,6 +38,8 @@
                         <button type="button" onclick="hideUserForm()">Отмена</button>
                     </form>
                 </div>
+                <div id="users-list"></div>
+
             </section>
 
             <section id="accounts" class="section">
@@ -46,7 +47,6 @@
                 <div class="controls">
                     <button onclick="showAccountForm()">Добавить счет</button>
                 </div>
-                <div id="accounts-list"></div>
                 <div id="account-form" class="form-container" style="display: none;">
                     <h3>Добавить счет</h3>
                     <form id="accountForm">
@@ -62,6 +62,8 @@
                         <button type="button" onclick="hideAccountForm()">Отмена</button>
                     </form>
                 </div>
+                <div id="accounts-list"></div>
+
             </section>
 
             <section id="categories" class="section">
@@ -69,7 +71,6 @@
                 <div class="controls">
                     <button onclick="showCategoryForm()">Добавить категорию</button>
                 </div>
-                <div id="categories-list"></div>
                 <div id="category-form" class="form-container" style="display: none;">
                     <h3>Добавить категорию</h3>
                     <form id="categoryForm">
@@ -83,14 +84,32 @@
                         <button type="button" onclick="hideCategoryForm()">Отмена</button>
                     </form>
                 </div>
+                <div id="categories-list"></div>
+
             </section>
 
             <section id="transactions" class="section">
                 <h2>Транзакции</h2>
                 <div class="controls">
                     <button onclick="showTransactionForm()">Добавить транзакцию</button>
+                    <button onclick="showTransferForm()">Добавить перевод</button>
                 </div>
-                <div id="transactions-list"></div>
+                <div id="transfer-form" class="form-container" style="display: none; margin-top: 10px;">
+                    <h3>Добавить перевод</h3>
+                    <form id="transferForm">
+                        <select id="transferAccountFrom" required>
+                            <option value="">Счет откуда</option>
+                        </select>
+                        <select id="transferAccountTo" required>
+                            <option value="">Счет куда</option>
+                        </select>
+                        <input type="number" id="transferAmount" placeholder="Сумма" step="0.01" required>
+                        <textarea id="transferDescription" placeholder="Описание (опционально)"></textarea>
+                        <input type="date" id="transferDate">
+                        <button type="submit">Создать</button>
+                        <button type="button" onclick="hideTransferForm()">Отмена</button>
+                    </form>
+                </div>
                 <div id="transaction-form" class="form-container" style="display: none;">
                     <h3>Добавить транзакцию</h3>
                     <form id="transactionForm">
@@ -124,6 +143,25 @@
                         <button type="button" onclick="hideTransactionEdit()">Отмена</button>
                     </form>
                 </div>
+                <div id="transfer-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать перевод</h3>
+                    <form id="transferEditForm">
+                        <input type="hidden" id="editTransferId">
+                        <select id="editTransferAccountFrom" required>
+                            <option value="">Счет откуда</option>
+                        </select>
+                        <select id="editTransferAccountTo" required>
+                            <option value="">Счет куда</option>
+                        </select>
+                        <input type="number" id="editTransferAmount" placeholder="Сумма" step="0.01" required>
+                        <textarea id="editTransferDescription" placeholder="Описание"></textarea>
+                        <input type="date" id="editTransferDate">
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideTransferEdit()">Отмена</button>
+                    </form>
+                </div>
+                <div id="transactions-list"></div>
+
             </section>
 
             <section id="budgets" class="section">
@@ -131,7 +169,6 @@
                 <div class="controls">
                     <button onclick="showBudgetForm()">Добавить бюджет</button>
                 </div>
-                <div id="budgets-list"></div>
                 <div id="budget-form" class="form-container" style="display: none;">
                     <h3>Добавить бюджет</h3>
                     <form id="budgetForm">
@@ -145,6 +182,8 @@
                         <button type="button" onclick="hideBudgetForm()">Отмена</button>
                     </form>
                 </div>
+                <div id="budgets-list"></div>
+
             </section>
 
             <section id="reports" class="section">

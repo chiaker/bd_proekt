@@ -2,6 +2,10 @@ const API_BASE = 'http://localhost:8000';
 
 let currentSection = 'users';
 
+function getEntityId(obj) {
+    return obj.id ?? obj.user_id ?? obj.account_id ?? obj.category_id ?? obj.transaction_id ?? obj.budget_id ?? null;
+}
+
 function showSection(sectionName) {
     document.querySelectorAll('.section').forEach(section => {
         section.classList.remove('active');
@@ -52,7 +56,17 @@ async function apiCall(endpoint, method = 'GET', data = null) {
         const response = await fetch(`${API_BASE}${endpoint}`, options);
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // try to extract JSON error message
+            let errMsg = `HTTP error! status: ${response.status}`;
+            try {
+                const errJson = await response.json();
+                if (errJson.message) errMsg = errJson.message;
+                else if (errJson.detail) errMsg = errJson.detail;
+                else if (typeof errJson === 'string') errMsg = errJson;
+            } catch (e) {
+                // ignore JSON parse errors
+            }
+            throw new Error(errMsg);
         }
 
         return await response.json();
@@ -113,7 +127,7 @@ function displayUsers(users) {
         userDiv.innerHTML = `
             <h4>${user.username}</h4>
             <p><strong>Email:</strong> ${user.email}</p>
-            <p><strong>ID:</strong> ${user.user_id}</p>
+            <p><strong>ID:</strong> ${getEntityId(user)}</p>
             <p><strong>Создан:</strong> ${new Date(user.created_at).toLocaleDateString('ru-RU')}</p>
         `;
         container.appendChild(userDiv);
@@ -170,7 +184,7 @@ function displayAccounts(accounts) {
             <h4>${account.name}</h4>
             <p><strong>Тип:</strong> ${account.type}</p>
             <p><strong>Баланс:</strong> ${account.balance} ₽</p>
-            <p><strong>ID:</strong> ${account.account_id}</p>
+            <p><strong>ID:</strong> ${getEntityId(account)}</p>
         `;
         container.appendChild(accountDiv);
     });
@@ -225,7 +239,7 @@ function displayCategories(categories) {
         categoryDiv.innerHTML = `
             <h4>${category.name}</h4>
             <p><strong>Тип:</strong> ${category.type === 'income' ? 'Доход' : 'Расход'}</p>
-            <p><strong>ID:</strong> ${category.category_id}</p>
+            <p><strong>ID:</strong> ${getEntityId(category)}</p>
         `;
         container.appendChild(categoryDiv);
     });
@@ -259,16 +273,17 @@ document.getElementById('categoryForm').addEventListener('submit', async (e) => 
 async function loadTransactions() {
     showLoading('transactions-list');
     const transactions = await apiCall('/transactions');
-    if (transactions) {
-        displayTransactions(transactions);
+    const transfers = await apiCall('/transactions/ba');
+    if (transactions || transfers) {
+        displayAllTransactions(transactions || [], transfers || []);
     }
 }
 
-async function displayTransactions(transactions) {
+async function displayAllTransactions(transactions, transfers) {
     const container = document.getElementById('transactions-list');
     container.innerHTML = '';
 
-    if (transactions.length === 0) {
+    if ((!transactions || transactions.length === 0) && (!transfers || transfers.length === 0)) {
         container.innerHTML = '<p>Транзакции не найдены</p>';
         return;
     }
@@ -281,37 +296,94 @@ async function displayTransactions(transactions) {
 
     if (accounts) {
         accounts.forEach(account => {
-            accountMap[account.account_id] = account.name;
+            accountMap[getEntityId(account)] = account.name;
         });
     }
 
     if (categories) {
         categories.forEach(category => {
-            categoryMap[category.category_id] = category.name;
+            categoryMap[getEntityId(category)] = category.name;
         });
     }
 
-    transactions.forEach(transaction => {
+    // unify items and sort by date desc
+    const unified = [];
+    if (transactions) {
+        transactions.forEach(transaction => unified.push({ _type: 'transaction', ...transaction }));
+    }
+    if (transfers) {
+        transfers.forEach(t => unified.push({ _type: 'transfer', ...t }));
+    }
+
+    unified.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date));
+
+    unified.forEach(item => {
         const transactionDiv = document.createElement('div');
         transactionDiv.className = 'list-item';
-        transactionDiv.innerHTML = `
-            <h4>Транзакция #${transaction.transaction_id}</h4>
-            <p><strong>Сумма:</strong> ${transaction.amount} ₽</p>
-            <p><strong>Счет:</strong> ${accountMap[transaction.account_id] || 'Неизвестно'}</p>
-            <p><strong>Категория:</strong> ${categoryMap[transaction.category_id] || 'Неизвестно'}</p>
-            <p><strong>Описание:</strong> ${transaction.description || 'Нет описания'}</p>
-            <p><strong>Дата:</strong> ${new Date(transaction.transaction_date).toLocaleDateString('ru-RU')}</p>
-            <div class="actions">
-                <button class="edit-btn" onclick="editTransaction(${transaction.transaction_id})">Редактировать</button>
-                <button class="delete-btn" onclick="deleteTransaction(${transaction.transaction_id})">Удалить</button>
-            </div>
-        `;
+        if (item._type === 'transaction') {
+            transactionDiv.innerHTML = `
+                <h4>Транзакция #${getEntityId(item)}</h4>
+                <p><strong>Сумма:</strong> ${item.amount} ₽</p>
+                <p><strong>Счет:</strong> ${accountMap[item.account_id] || 'Неизвестно'}</p>
+                <p><strong>Категория:</strong> ${categoryMap[item.category_id] || 'Неизвестно'}</p>
+                <p><strong>Описание:</strong> ${item.description || 'Нет описания'}</p>
+                <p><strong>Дата:</strong> ${new Date(item.transaction_date).toLocaleDateString('ru-RU')}</p>
+                <div class="actions">
+                    <button class="edit-btn" onclick="editTransaction(${getEntityId(item)})">Редактировать</button>
+                    <button class="delete-btn" onclick="deleteTransaction(${getEntityId(item)})">Удалить</button>
+                </div>
+            `;
+        } else {
+            transactionDiv.innerHTML = `
+                <h4>Перевод #${getEntityId(item)}</h4>
+                <p><strong>Сумма:</strong> ${item.amount} ₽</p>
+                <p><strong>От:</strong> ${accountMap[item.account_id_from] || 'Неизвестно'}</p>
+                <p><strong>К:</strong> ${accountMap[item.account_id_to] || 'Неизвестно'}</p>
+                <p><strong>Описание:</strong> ${item.description || 'Нет описания'}</p>
+                <p><strong>Дата:</strong> ${new Date(item.transaction_date).toLocaleDateString('ru-RU')}</p>
+                <div class="actions">
+                    <button class="edit-btn" onclick="editTransfer(${getEntityId(item)})">Редактировать</button>
+                    <button class="delete-btn" onclick="deleteTransfer(${getEntityId(item)})">Удалить</button>
+                </div>
+            `;
+        }
         container.appendChild(transactionDiv);
     });
 }
 
 function showTransactionForm() {
     document.getElementById('transaction-form').style.display = 'block';
+}
+
+async function showTransferForm() {
+    document.getElementById('transfer-form').style.display = 'block';
+    // populate select options (re-use accounts select population)
+    await loadAccountsForSelect();
+    const fromSelect = document.getElementById('transferAccountFrom');
+    const toSelect = document.getElementById('transferAccountTo');
+    if (fromSelect && toSelect) {
+        // copy values from transactionAccount options
+        const src = document.getElementById('transactionAccount');
+        fromSelect.innerHTML = '<option value="">Счет откуда</option>';
+        toSelect.innerHTML = '<option value="">Счет куда</option>';
+        for (let i = 0; i < src.options.length; i++) {
+            const o = src.options[i];
+            const option1 = document.createElement('option');
+            option1.value = o.value;
+            option1.textContent = o.textContent;
+            fromSelect.appendChild(option1);
+
+            const option2 = document.createElement('option');
+            option2.value = o.value;
+            option2.textContent = o.textContent;
+            toSelect.appendChild(option2);
+        }
+    }
+}
+
+function hideTransferForm() {
+    document.getElementById('transfer-form').style.display = 'none';
+    document.getElementById('transferForm').reset();
 }
 
 function hideTransactionForm() {
@@ -330,12 +402,12 @@ async function loadAccountsForSelect() {
 
         accounts.forEach(account => {
             const option = document.createElement('option');
-            option.value = account.account_id;
+            option.value = getEntityId(account);
             option.textContent = account.name;
             select.appendChild(option);
 
             const editOption = document.createElement('option');
-            editOption.value = account.account_id;
+            editOption.value = getEntityId(account);
             editOption.textContent = account.name;
             editSelect.appendChild(editOption);
         });
@@ -353,12 +425,12 @@ async function loadCategoriesForSelect() {
 
         categories.forEach(category => {
             const option = document.createElement('option');
-            option.value = category.category_id;
+            option.value = getEntityId(category);
             option.textContent = category.name;
             select.appendChild(option);
 
             const editOption = document.createElement('option');
-            editOption.value = category.category_id;
+            editOption.value = getEntityId(category);
             editOption.textContent = category.name;
             editSelect.appendChild(editOption);
         });
@@ -381,13 +453,48 @@ document.getElementById('transactionForm').addEventListener('submit', async (e) 
         showSuccess('Транзакция создана успешно');
         hideTransactionForm();
         loadTransactions();
+        loadAccounts();
+    }
+});
+
+document.getElementById('transferForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = {
+        account_id_from: parseInt(document.getElementById('transferAccountFrom').value),
+        account_id_to: parseInt(document.getElementById('transferAccountTo').value),
+        amount: parseFloat(document.getElementById('transferAmount').value),
+        description: document.getElementById('transferDescription').value,
+        transaction_date: document.getElementById('transferDate').value || new Date().toISOString().split('T')[0]
+    };
+
+    // Client-side validation
+    if (!formData.account_id_from || !formData.account_id_to) {
+        showError('Выберите счета отправления и получения');
+        return;
+    }
+    if (formData.account_id_from === formData.account_id_to) {
+        showError('Счета отправления и получения не должны совпадать');
+        return;
+    }
+    if (!formData.amount || formData.amount <= 0) {
+        showError('Введите корректную сумму перевода');
+        return;
+    }
+
+    const result = await apiCall('/transactions/ba', 'POST', formData);
+    if (result) {
+        showSuccess('Перевод создан успешно');
+        hideTransferForm();
+        loadTransactions();
+        loadAccounts();
     }
 });
 
 async function editTransaction(transactionId) {
     const transaction = await apiCall(`/transactions/${transactionId}`);
     if (transaction) {
-        document.getElementById('editTransactionId').value = transaction.transaction_id;
+        document.getElementById('editTransactionId').value = transaction.id;
         document.getElementById('editTransactionAccount').value = transaction.account_id;
         document.getElementById('editTransactionCategory').value = transaction.category_id;
         document.getElementById('editTransactionAmount').value = transaction.amount;
@@ -420,6 +527,7 @@ document.getElementById('transactionEditForm').addEventListener('submit', async 
         showSuccess('Транзакция обновлена успешно');
         hideTransactionEdit();
         loadTransactions();
+        loadAccounts();
     }
 });
 
@@ -429,6 +537,72 @@ async function deleteTransaction(transactionId) {
         if (result) {
             showSuccess('Транзакция удалена успешно');
             loadTransactions();
+            loadAccounts();
+        }
+    }
+}
+
+async function editTransfer(transferId) {
+    const transfer = await apiCall(`/transactions/ba/${transferId}`);
+    if (transfer) {
+        // populate account selects
+        await loadAccountsForSelect();
+        const src = document.getElementById('transactionAccount');
+        const from = document.getElementById('editTransferAccountFrom');
+        const to = document.getElementById('editTransferAccountTo');
+
+        from.innerHTML = '<option value="">Счет откуда</option>';
+        to.innerHTML = '<option value="">Счет куда</option>';
+        for (let i = 0; i < src.options.length; i++) {
+            const o = src.options[i];
+            const option1 = document.createElement('option'); option1.value = o.value; option1.textContent = o.textContent; from.appendChild(option1);
+            const option2 = document.createElement('option'); option2.value = o.value; option2.textContent = o.textContent; to.appendChild(option2);
+        }
+
+        document.getElementById('editTransferId').value = transfer.id;
+        document.getElementById('editTransferAccountFrom').value = transfer.account_id_from;
+        document.getElementById('editTransferAccountTo').value = transfer.account_id_to;
+        document.getElementById('editTransferAmount').value = transfer.amount;
+        document.getElementById('editTransferDescription').value = transfer.description || '';
+        document.getElementById('editTransferDate').value = transfer.transaction_date;
+
+        document.getElementById('transfer-edit').style.display = 'block';
+    }
+}
+
+function hideTransferEdit() {
+    document.getElementById('transfer-edit').style.display = 'none';
+    document.getElementById('transferEditForm').reset();
+}
+
+document.getElementById('transferEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const transferId = document.getElementById('editTransferId').value;
+    const formData = {
+        account_id_from: parseInt(document.getElementById('editTransferAccountFrom').value),
+        account_id_to: parseInt(document.getElementById('editTransferAccountTo').value),
+        amount: parseFloat(document.getElementById('editTransferAmount').value),
+        description: document.getElementById('editTransferDescription').value,
+        transaction_date: document.getElementById('editTransferDate').value
+    };
+
+    const result = await apiCall(`/transactions/ba/${transferId}`, 'PUT', formData);
+    if (result) {
+        showSuccess('Перевод обновлён успешно');
+        hideTransferEdit();
+        loadTransactions();
+        loadAccounts();
+    }
+});
+
+async function deleteTransfer(transferId) {
+    if (confirm('Вы уверены, что хотите удалить этот перевод?')) {
+        const result = await apiCall(`/transactions/ba/${transferId}`, 'DELETE');
+        if (result) {
+            showSuccess('Перевод удалён успешно');
+            loadTransactions();
+            loadAccounts();
         }
     }
 }
@@ -455,7 +629,7 @@ async function displayBudgets(budgets) {
 
     if (categories) {
         categories.forEach(category => {
-            categoryMap[category.category_id] = category.name;
+            categoryMap[category.id] = category.name;
         });
     }
 
@@ -463,7 +637,7 @@ async function displayBudgets(budgets) {
         const budgetDiv = document.createElement('div');
         budgetDiv.className = 'list-item';
         budgetDiv.innerHTML = `
-            <h4>Бюджет #${budget.budget_id}</h4>
+            <h4>Бюджет #${budget.id}</h4>
             <p><strong>Категория:</strong> ${categoryMap[budget.category_id] || 'Неизвестно'}</p>
             <p><strong>Лимит:</strong> ${budget.amount_limit} ₽</p>
             <p><strong>Период:</strong> ${new Date(budget.period_start).toLocaleDateString('ru-RU')} - ${new Date(budget.period_end).toLocaleDateString('ru-RU')}</p>
@@ -490,7 +664,7 @@ async function loadCategoriesForBudgetSelect() {
 
         categories.forEach(category => {
             const option = document.createElement('option');
-            option.value = category.category_id;
+            option.value = category.id;
             option.textContent = category.name;
             select.appendChild(option);
         });
@@ -553,7 +727,7 @@ function displayTransactionReport(transactions) {
         const transactionDiv = document.createElement('div');
         transactionDiv.className = 'list-item';
         transactionDiv.innerHTML = `
-            <h4>Транзакция #${transaction.transaction_id}</h4>
+            <h4>Транзакция #${transaction.id}</h4>
             <p><strong>Сумма:</strong> ${transaction.amount} ₽</p>
             <p><strong>Описание:</strong> ${transaction.description || 'Нет описания'}</p>
             <p><strong>Дата:</strong> ${new Date(transaction.transaction_date).toLocaleDateString('ru-RU')}</p>

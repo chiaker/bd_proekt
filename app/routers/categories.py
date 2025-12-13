@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
@@ -16,6 +16,10 @@ async def get_categories(db: Session = Depends(get_db)):
 
 @router.post("/", response_model=CategoryResponse)
 async def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
+    if not category.name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+    if category.type not in ('income', 'expense'):
+        raise HTTPException(status_code=400, detail="Category type must be 'income' or 'expense'")
     db_category = Category(
         user_id=1,
         name=category.name,

@@ -27,7 +27,7 @@ async def get_category_report(db: Session = Depends(get_db)):
         Category.name,
         Category.type,
         func.sum(Transaction.amount).label('total_amount'),
-        func.count(Transaction.transaction_id).label('transaction_count')
-    ).join(Transaction).group_by(Category.category_id, Category.name, Category.type).all()
+        func.count(Transaction.id).label('transaction_count')
+    ).join(Transaction).group_by(Category.id, Category.name, Category.type).all()
 
     return [{"category": r.name, "type": r.type, "total_amount": float(r.total_amount), "count": r.transaction_count} for r in result]

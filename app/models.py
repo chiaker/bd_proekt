@@ -7,8 +7,7 @@ from app.database import Base
 
 class User(Base):
     __tablename__ = "users"
-
-    user_id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False)
     email = Column(String(100), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
@@ -22,8 +21,8 @@ class User(Base):
 class Account(Base):
     __tablename__ = "accounts"
 
-    account_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     type = Column(String(20), nullable=False)
     balance = Column(DECIMAL(12, 2), default=0.00)
@@ -35,9 +34,8 @@ class Account(Base):
 
 class Category(Base):
     __tablename__ = "categories"
-
-    category_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     type = Column(String(10), nullable=False)
 
@@ -48,16 +46,14 @@ class Category(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
-
-    transaction_id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey(
-        "accounts.account_id"), nullable=False)
+        "accounts.id"), nullable=False)
     category_id = Column(Integer, ForeignKey(
-        "categories.category_id"), nullable=False)
+        "categories.id"), nullable=False)
     amount = Column(DECIMAL(12, 2), nullable=False)
     description = Column(Text)
     transaction_date = Column(Date, default=date.today)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
     account = relationship("Account", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
@@ -65,14 +61,27 @@ class Transaction(Base):
 
 class Budget(Base):
     __tablename__ = "budgets"
-
-    budget_id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey(
-        "categories.category_id"), nullable=False)
+        "categories.id"), nullable=False)
     amount_limit = Column(DECIMAL(12, 2), nullable=False)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
 
     user = relationship("User", back_populates="budgets")
     category = relationship("Category", back_populates="budgets")
+
+
+class TransactionBA(Base):
+    __tablename__ = "transactions_b_a"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id_from = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_id_to = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    amount = Column(DECIMAL(12, 2), nullable=False)
+    description = Column(Text)
+    transaction_date = Column(Date, default=date.today)
+
+    account_from = relationship("Account", foreign_keys=[account_id_from])
+    account_to = relationship("Account", foreign_keys=[account_id_to])
