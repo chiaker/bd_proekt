@@ -16,7 +16,14 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
 class AccountCreate(BaseModel):
+    user_id: int
     name: str
     type: str
     balance: float = 0.0
@@ -31,7 +38,15 @@ class AccountResponse(BaseModel):
     created_at: datetime
 
 
+class AccountUpdate(BaseModel):
+    user_id: Optional[int] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
+    balance: Optional[float] = None
+
+
 class CategoryCreate(BaseModel):
+    user_id: int
     name: str
     type: str
 
@@ -41,6 +56,12 @@ class CategoryResponse(BaseModel):
     user_id: int
     name: str
     type: str
+
+
+class CategoryUpdate(BaseModel):
+    user_id: Optional[int] = None
+    name: Optional[str] = None
+    type: Optional[str] = None
 
 
 class TransactionCreate(BaseModel):
@@ -78,6 +99,7 @@ class TransactionBAResponse(BaseModel):
 
 
 class BudgetCreate(BaseModel):
+    user_id: int
     category_id: int
     amount_limit: float
     period_start: date
@@ -91,3 +113,21 @@ class BudgetResponse(BaseModel):
     amount_limit: float
     period_start: date
     period_end: date
+
+
+class BudgetUpdate(BaseModel):
+    user_id: Optional[int] = None
+    category_id: Optional[int] = None
+    amount_limit: Optional[float] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+
+
+class LogResponse(BaseModel):
+    log_id: int
+    table_name: str
+    record_id: int
+    action: str
+    action_date: datetime
+    old_data: Optional[dict] = None
+    new_data: Optional[dict] = None

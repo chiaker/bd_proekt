@@ -12,6 +12,16 @@
     <div class="container">
         <header>
             <h1>Система управления финансами</h1>
+            <div class="filter-row">
+                <label for="userFilter">Фильтр по пользователю:</label>
+                <select id="userFilter">
+                    <option value="">Все пользователи</option>
+                </select>
+                <span id="currentRole"
+                    style="margin-left: 20px; padding: 8px 16px; background: rgba(255, 255, 255, 0.2); border-radius: 8px; font-weight: 600;">
+                    Роль БД: <span id="roleName">Загрузка...</span>
+                </span>
+            </div>
             <nav>
                 <button onclick="showSection('users')">Пользователи</button>
                 <button onclick="showSection('accounts')">Счета</button>
@@ -19,6 +29,7 @@
                 <button onclick="showSection('transactions')">Транзакции</button>
                 <button onclick="showSection('budgets')">Бюджеты</button>
                 <button onclick="showSection('reports')">Отчеты</button>
+                <button onclick="showSection('logs')">Логи</button>
             </nav>
         </header>
 
@@ -38,6 +49,17 @@
                         <button type="button" onclick="hideUserForm()">Отмена</button>
                     </form>
                 </div>
+                <div id="user-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать пользователя</h3>
+                    <form id="userEditForm">
+                        <input type="hidden" id="editUserId">
+                        <input type="text" id="editUsername" placeholder="Имя пользователя" required>
+                        <input type="email" id="editEmail" placeholder="Email" required>
+                        <input type="password" id="editPassword" placeholder="Новый пароль (опционально)">
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideUserEdit()">Отмена</button>
+                    </form>
+                </div>
                 <div id="users-list"></div>
 
             </section>
@@ -50,6 +72,9 @@
                 <div id="account-form" class="form-container" style="display: none;">
                     <h3>Добавить счет</h3>
                     <form id="accountForm">
+                        <select id="accountUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
                         <input type="text" id="accountName" placeholder="Название счета" required>
                         <select id="accountType" required>
                             <option value="">Выберите тип</option>
@@ -60,6 +85,25 @@
                         <input type="number" id="accountBalance" placeholder="Баланс" step="0.01" value="0">
                         <button type="submit">Создать</button>
                         <button type="button" onclick="hideAccountForm()">Отмена</button>
+                    </form>
+                </div>
+                <div id="account-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать счет</h3>
+                    <form id="accountEditForm">
+                        <input type="hidden" id="editAccountId">
+                        <select id="editAccountUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
+                        <input type="text" id="editAccountName" placeholder="Название счета" required>
+                        <select id="editAccountType" required>
+                            <option value="">Выберите тип</option>
+                            <option value="cash">Наличные</option>
+                            <option value="card">Карта</option>
+                            <option value="deposit">Депозит</option>
+                        </select>
+                        <input type="number" id="editAccountBalance" placeholder="Баланс" step="0.01" required>
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideAccountEdit()">Отмена</button>
                     </form>
                 </div>
                 <div id="accounts-list"></div>
@@ -74,6 +118,9 @@
                 <div id="category-form" class="form-container" style="display: none;">
                     <h3>Добавить категорию</h3>
                     <form id="categoryForm">
+                        <select id="categoryUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
                         <input type="text" id="categoryName" placeholder="Название категории" required>
                         <select id="categoryType" required>
                             <option value="">Выберите тип</option>
@@ -82,6 +129,23 @@
                         </select>
                         <button type="submit">Создать</button>
                         <button type="button" onclick="hideCategoryForm()">Отмена</button>
+                    </form>
+                </div>
+                <div id="category-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать категорию</h3>
+                    <form id="categoryEditForm">
+                        <input type="hidden" id="editCategoryId">
+                        <select id="editCategoryUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
+                        <input type="text" id="editCategoryName" placeholder="Название категории" required>
+                        <select id="editCategoryType" required>
+                            <option value="">Выберите тип</option>
+                            <option value="income">Доход</option>
+                            <option value="expense">Расход</option>
+                        </select>
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideCategoryEdit()">Отмена</button>
                     </form>
                 </div>
                 <div id="categories-list"></div>
@@ -172,6 +236,9 @@
                 <div id="budget-form" class="form-container" style="display: none;">
                     <h3>Добавить бюджет</h3>
                     <form id="budgetForm">
+                        <select id="budgetUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
                         <select id="budgetCategory" required>
                             <option value="">Выберите категорию</option>
                         </select>
@@ -180,6 +247,23 @@
                         <input type="date" id="budgetEnd" required>
                         <button type="submit">Создать</button>
                         <button type="button" onclick="hideBudgetForm()">Отмена</button>
+                    </form>
+                </div>
+                <div id="budget-edit" class="form-container" style="display: none;">
+                    <h3>Редактировать бюджет</h3>
+                    <form id="budgetEditForm">
+                        <input type="hidden" id="editBudgetId">
+                        <select id="editBudgetUser" required>
+                            <option value="">Выберите пользователя</option>
+                        </select>
+                        <select id="editBudgetCategory" required>
+                            <option value="">Выберите категорию</option>
+                        </select>
+                        <input type="number" id="editBudgetAmount" placeholder="Лимит бюджета" step="0.01" required>
+                        <input type="date" id="editBudgetStart" required>
+                        <input type="date" id="editBudgetEnd" required>
+                        <button type="submit">Сохранить</button>
+                        <button type="button" onclick="hideBudgetEdit()">Отмена</button>
                     </form>
                 </div>
                 <div id="budgets-list"></div>
@@ -193,6 +277,24 @@
                     <button onclick="loadCategoryReport()">Отчет по категориям</button>
                 </div>
                 <div id="reports-content"></div>
+            </section>
+
+            <section id="logs" class="section">
+                <h2>Логи системы</h2>
+                <div class="controls">
+                    <button onclick="loadLogs()">Обновить логи</button>
+                    <select id="logTableFilter">
+                        <option value="">Все таблицы</option>
+                        <option value="users">Пользователи</option>
+                        <option value="accounts">Счета</option>
+                        <option value="categories">Категории</option>
+                        <option value="transactions">Транзакции</option>
+                        <option value="budgets">Бюджеты</option>
+                        <option value="logs">Логи</option>
+                    </select>
+                    <input type="number" id="logLimit" placeholder="Лимит записей" value="100" min="1" max="1000">
+                </div>
+                <div id="logs-list"></div>
             </section>
         </main>
     </div>

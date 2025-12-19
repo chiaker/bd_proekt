@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Date, Text, ForeignKey
-from sqlalchemy.types import DECIMAL
+from sqlalchemy.types import DECIMAL, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
 from app.database import Base
@@ -85,3 +85,15 @@ class TransactionBA(Base):
 
     account_from = relationship("Account", foreign_keys=[account_id_from])
     account_to = relationship("Account", foreign_keys=[account_id_to])
+
+
+class Log(Base):
+    __tablename__ = "logs"
+    
+    log_id = Column(Integer, primary_key=True, index=True)
+    table_name = Column(Text, nullable=False)
+    record_id = Column(Integer, nullable=False)
+    action = Column(String(10), nullable=False)  # INSERT, UPDATE, DELETE
+    action_date = Column(DateTime, default=datetime.utcnow)
+    old_data = Column(JSON, nullable=True)
+    new_data = Column(JSON, nullable=True)

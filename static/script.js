@@ -1,6 +1,56 @@
 const API_BASE = 'http://localhost:8000';
 
 let currentSection = 'users';
+let selectedUserId = null;
+let usersCache = [];
+let usersMap = {};
+
+function withUser(endpoint) {
+    if (selectedUserId) {
+        const separator = endpoint.includes('?') ? '&' : '?';
+        return `${endpoint}${separator}user_id=${selectedUserId}`;
+    }
+    return endpoint;
+}
+
+function setSelectedUser(userId) {
+    selectedUserId = userId ? parseInt(userId) : null;
+    reloadCurrentSection();
+}
+
+function reloadCurrentSection() {
+    switch (currentSection) {
+        case 'users':
+            loadUsers();
+            break;
+        case 'accounts':
+            loadAccounts();
+            break;
+        case 'categories':
+            loadCategories();
+            break;
+        case 'transactions':
+            loadTransactions();
+            loadAccountsForSelect();
+            loadCategoriesForSelect();
+            break;
+        case 'budgets':
+            loadBudgets();
+            loadCategoriesForBudgetSelect();
+            break;
+        case 'reports':
+            // reports are triggered manually
+            break;
+        case 'logs':
+            loadLogs();
+            break;
+    }
+}
+
+function getUserName(userId) {
+    if (!userId) return 'Не указан';
+    return usersMap[userId] ? usersMap[userId].username : `ID ${userId}`;
+}
 
 function getEntityId(obj) {
     return obj.id ?? obj.user_id ?? obj.account_id ?? obj.category_id ?? obj.transaction_id ?? obj.budget_id ?? null;
@@ -37,6 +87,9 @@ function showSection(sectionName) {
         case 'reports':
             // Отчеты загружаются по кнопкам
             break;
+        case 'logs':
+            loadLogs();
+            break;
     }
 }
 
@@ -66,13 +119,23 @@ async function apiCall(endpoint, method = 'GET', data = null) {
             } catch (e) {
                 // ignore JSON parse errors
             }
+
+            // Специальная обработка ошибок доступа
+            if (response.status === 403) {
+                showError(`Доступ запрещен: ${errMsg}`);
+            } else {
+                showError(`Ошибка: ${errMsg}`);
+            }
             throw new Error(errMsg);
         }
 
         return await response.json();
     } catch (error) {
         console.error('API call failed:', error);
-        showError(`Ошибка: ${error.message}`);
+        // Не показываем ошибку дважды если она уже была показана выше
+        if (!error.message.includes('HTTP error')) {
+            showError(`Ошибка: ${error.message}`);
+        }
         return null;
     }
 }
@@ -108,6 +171,10 @@ async function loadUsers() {
     showLoading('users-list');
     const users = await apiCall('/users');
     if (users) {
+        usersCache = users;
+        usersMap = {};
+        users.forEach(u => { usersMap[u.id] = u; });
+        populateUserSelects();
         displayUsers(users);
     }
 }
@@ -129,9 +196,65 @@ function displayUsers(users) {
             <p><strong>Email:</strong> ${user.email}</p>
             <p><strong>ID:</strong> ${getEntityId(user)}</p>
             <p><strong>Создан:</strong> ${new Date(user.created_at).toLocaleDateString('ru-RU')}</p>
+            <div class="actions">
+                <button class="edit-btn" onclick="editUser(${user.id})">Редактировать</button>
+                <button class="delete-btn" onclick="deleteUser(${user.id})">Удалить</button>
+            </div>
         `;
         container.appendChild(userDiv);
     });
+}
+
+function populateUserSelects() {
+    const filterSelect = document.getElementById('userFilter');
+    if (filterSelect) {
+        const current = filterSelect.value;
+        filterSelect.innerHTML = '<option value="">Все пользователи</option>';
+        usersCache.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.username} (${user.email})`;
+            filterSelect.appendChild(option);
+        });
+        if (current) {
+            filterSelect.value = current;
+            selectedUserId = current ? parseInt(current) : null;
+        }
+    }
+
+    const userSelectIds = ['accountUser', 'categoryUser', 'budgetUser'];
+    const editSelectIds = ['editAccountUser', 'editCategoryUser', 'editBudgetUser'];
+    userSelectIds.concat(editSelectIds).forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const current = select.value;
+        select.innerHTML = '<option value="">Выберите пользователя</option>';
+        usersCache.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.username} (${user.email})`;
+            select.appendChild(option);
+        });
+        if (current) {
+            select.value = current;
+        } else if (selectedUserId) {
+            select.value = selectedUserId;
+        }
+    });
+}
+
+async function loadCurrentRole() {
+    try {
+        const result = await apiCall('/logs/current-role');
+        if (result && result.role) {
+            const roleNameElement = document.getElementById('roleName');
+            if (roleNameElement) {
+                roleNameElement.textContent = result.role;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load current role:', error);
+    }
 }
 
 function showUserForm() {
@@ -141,6 +264,15 @@ function showUserForm() {
 function hideUserForm() {
     document.getElementById('user-form').style.display = 'none';
     document.getElementById('userForm').reset();
+}
+
+function showUserEdit() {
+    document.getElementById('user-edit').style.display = 'block';
+}
+
+function hideUserEdit() {
+    document.getElementById('user-edit').style.display = 'none';
+    document.getElementById('userEditForm').reset();
 }
 
 document.getElementById('userForm').addEventListener('submit', async (e) => {
@@ -160,9 +292,52 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     }
 });
 
+async function editUser(userId) {
+    const user = usersMap[userId];
+    if (!user) return;
+    document.getElementById('editUserId').value = user.id;
+    document.getElementById('editUsername').value = user.username;
+    document.getElementById('editEmail').value = user.email;
+    document.getElementById('editPassword').value = '';
+    showUserEdit();
+}
+
+document.getElementById('userEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('editUserId').value;
+    const payload = {
+        username: document.getElementById('editUsername').value,
+        email: document.getElementById('editEmail').value,
+        password: document.getElementById('editPassword').value || undefined
+    };
+    const result = await apiCall(`/users/${userId}`, 'PUT', payload);
+    if (result) {
+        showSuccess('Пользователь обновлен');
+        hideUserEdit();
+        loadUsers();
+        reloadCurrentSection();
+    }
+});
+
+async function deleteUser(userId) {
+    if (!confirm('Удалить пользователя и все связанные данные?')) return;
+    const result = await apiCall(`/users/${userId}`, 'DELETE');
+    if (result) {
+        showSuccess('Пользователь удален');
+        if (selectedUserId === userId) {
+            selectedUserId = null;
+            const filterSelect = document.getElementById('userFilter');
+            if (filterSelect) filterSelect.value = '';
+        }
+        loadUsers();
+        reloadCurrentSection();
+    }
+}
+
 async function loadAccounts() {
     showLoading('accounts-list');
-    const accounts = await apiCall('/accounts');
+    const endpoint = withUser('/accounts');
+    const accounts = await apiCall(endpoint);
     if (accounts) {
         displayAccounts(accounts);
     }
@@ -184,7 +359,12 @@ function displayAccounts(accounts) {
             <h4>${account.name}</h4>
             <p><strong>Тип:</strong> ${account.type}</p>
             <p><strong>Баланс:</strong> ${account.balance} ₽</p>
+            <p><strong>Пользователь:</strong> ${getUserName(account.user_id)}</p>
             <p><strong>ID:</strong> ${getEntityId(account)}</p>
+            <div class="actions">
+                <button class="edit-btn" onclick="editAccount(${account.id})">Редактировать</button>
+                <button class="delete-btn" onclick="deleteAccount(${account.id})">Удалить</button>
+            </div>
         `;
         container.appendChild(accountDiv);
     });
@@ -203,11 +383,16 @@ document.getElementById('accountForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const formData = {
+        user_id: parseInt(document.getElementById('accountUser').value),
         name: document.getElementById('accountName').value,
         type: document.getElementById('accountType').value,
         balance: parseFloat(document.getElementById('accountBalance').value)
     };
 
+    if (!formData.user_id) {
+        showError('Выберите пользователя для счета');
+        return;
+    }
     const result = await apiCall('/accounts', 'POST', formData);
     if (result) {
         showSuccess('Счет создан успешно');
@@ -216,9 +401,55 @@ document.getElementById('accountForm').addEventListener('submit', async (e) => {
     }
 });
 
+function hideAccountEdit() {
+    document.getElementById('account-edit').style.display = 'none';
+    document.getElementById('accountEditForm').reset();
+}
+
+async function editAccount(accountId) {
+    const account = await apiCall(`/accounts?user_id=${selectedUserId || ''}`);
+    const target = (account || []).find(a => a.id === accountId) || null;
+    if (!target) return;
+    document.getElementById('editAccountId').value = target.id;
+    document.getElementById('editAccountUser').value = target.user_id;
+    document.getElementById('editAccountName').value = target.name;
+    document.getElementById('editAccountType').value = target.type;
+    document.getElementById('editAccountBalance').value = target.balance;
+    document.getElementById('account-edit').style.display = 'block';
+}
+
+document.getElementById('accountEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const accountId = document.getElementById('editAccountId').value;
+    const formData = {
+        user_id: parseInt(document.getElementById('editAccountUser').value),
+        name: document.getElementById('editAccountName').value,
+        type: document.getElementById('editAccountType').value,
+        balance: parseFloat(document.getElementById('editAccountBalance').value)
+    };
+    const result = await apiCall(`/accounts/${accountId}`, 'PUT', formData);
+    if (result) {
+        showSuccess('Счет обновлен');
+        hideAccountEdit();
+        loadAccounts();
+        loadTransactions();
+    }
+});
+
+async function deleteAccount(accountId) {
+    if (!confirm('Удалить счет и связанные транзакции?')) return;
+    const result = await apiCall(`/accounts/${accountId}`, 'DELETE');
+    if (result) {
+        showSuccess('Счет удален');
+        loadAccounts();
+        loadTransactions();
+    }
+}
+
 async function loadCategories() {
     showLoading('categories-list');
-    const categories = await apiCall('/categories');
+    const endpoint = withUser('/categories');
+    const categories = await apiCall(endpoint);
     if (categories) {
         displayCategories(categories);
     }
@@ -239,7 +470,12 @@ function displayCategories(categories) {
         categoryDiv.innerHTML = `
             <h4>${category.name}</h4>
             <p><strong>Тип:</strong> ${category.type === 'income' ? 'Доход' : 'Расход'}</p>
+            <p><strong>Пользователь:</strong> ${getUserName(category.user_id)}</p>
             <p><strong>ID:</strong> ${getEntityId(category)}</p>
+            <div class="actions">
+                <button class="edit-btn" onclick="editCategory(${category.id})">Редактировать</button>
+                <button class="delete-btn" onclick="deleteCategory(${category.id})">Удалить</button>
+            </div>
         `;
         container.appendChild(categoryDiv);
     });
@@ -254,14 +490,24 @@ function hideCategoryForm() {
     document.getElementById('categoryForm').reset();
 }
 
+function hideCategoryEdit() {
+    document.getElementById('category-edit').style.display = 'none';
+    document.getElementById('categoryEditForm').reset();
+}
+
 document.getElementById('categoryForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const formData = {
+        user_id: parseInt(document.getElementById('categoryUser').value),
         name: document.getElementById('categoryName').value,
         type: document.getElementById('categoryType').value
     };
 
+    if (!formData.user_id) {
+        showError('Выберите пользователя для категории');
+        return;
+    }
     const result = await apiCall('/categories', 'POST', formData);
     if (result) {
         showSuccess('Категория создана успешно');
@@ -270,10 +516,50 @@ document.getElementById('categoryForm').addEventListener('submit', async (e) => 
     }
 });
 
+async function editCategory(categoryId) {
+    const categories = await apiCall(withUser('/categories'));
+    const target = (categories || []).find(c => c.id === categoryId);
+    if (!target) return;
+    document.getElementById('editCategoryId').value = target.id;
+    document.getElementById('editCategoryUser').value = target.user_id;
+    document.getElementById('editCategoryName').value = target.name;
+    document.getElementById('editCategoryType').value = target.type;
+    document.getElementById('category-edit').style.display = 'block';
+}
+
+document.getElementById('categoryEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const categoryId = document.getElementById('editCategoryId').value;
+    const formData = {
+        user_id: parseInt(document.getElementById('editCategoryUser').value),
+        name: document.getElementById('editCategoryName').value,
+        type: document.getElementById('editCategoryType').value
+    };
+    const result = await apiCall(`/categories/${categoryId}`, 'PUT', formData);
+    if (result) {
+        showSuccess('Категория обновлена');
+        hideCategoryEdit();
+        loadCategories();
+        loadTransactions();
+        loadBudgets();
+    }
+});
+
+async function deleteCategory(categoryId) {
+    if (!confirm('Удалить категорию и связанные записи?')) return;
+    const result = await apiCall(`/categories/${categoryId}`, 'DELETE');
+    if (result) {
+        showSuccess('Категория удалена');
+        loadCategories();
+        loadTransactions();
+        loadBudgets();
+    }
+}
+
 async function loadTransactions() {
     showLoading('transactions-list');
-    const transactions = await apiCall('/transactions');
-    const transfers = await apiCall('/transactions/ba');
+    const transactions = await apiCall(withUser('/transactions'));
+    const transfers = await apiCall(withUser('/transactions/ba'));
     if (transactions || transfers) {
         displayAllTransactions(transactions || [], transfers || []);
     }
@@ -288,15 +574,17 @@ async function displayAllTransactions(transactions, transfers) {
         return;
     }
 
-    const accounts = await apiCall('/accounts');
-    const categories = await apiCall('/categories');
+    const accounts = await apiCall(withUser('/accounts'));
+    const categories = await apiCall(withUser('/categories'));
 
     const accountMap = {};
+    const accountUserMap = {};
     const categoryMap = {};
 
     if (accounts) {
         accounts.forEach(account => {
             accountMap[getEntityId(account)] = account.name;
+            accountUserMap[getEntityId(account)] = account.user_id;
         });
     }
 
@@ -326,6 +614,7 @@ async function displayAllTransactions(transactions, transfers) {
                 <p><strong>Сумма:</strong> ${item.amount} ₽</p>
                 <p><strong>Счет:</strong> ${accountMap[item.account_id] || 'Неизвестно'}</p>
                 <p><strong>Категория:</strong> ${categoryMap[item.category_id] || 'Неизвестно'}</p>
+                <p><strong>Пользователь:</strong> ${getUserName(accountUserMap[item.account_id])}</p>
                 <p><strong>Описание:</strong> ${item.description || 'Нет описания'}</p>
                 <p><strong>Дата:</strong> ${new Date(item.transaction_date).toLocaleDateString('ru-RU')}</p>
                 <div class="actions">
@@ -339,6 +628,7 @@ async function displayAllTransactions(transactions, transfers) {
                 <p><strong>Сумма:</strong> ${item.amount} ₽</p>
                 <p><strong>От:</strong> ${accountMap[item.account_id_from] || 'Неизвестно'}</p>
                 <p><strong>К:</strong> ${accountMap[item.account_id_to] || 'Неизвестно'}</p>
+                <p><strong>Пользователь:</strong> ${getUserName(accountUserMap[item.account_id_from] || accountUserMap[item.account_id_to])}</p>
                 <p><strong>Описание:</strong> ${item.description || 'Нет описания'}</p>
                 <p><strong>Дата:</strong> ${new Date(item.transaction_date).toLocaleDateString('ru-RU')}</p>
                 <div class="actions">
@@ -392,7 +682,7 @@ function hideTransactionForm() {
 }
 
 async function loadAccountsForSelect() {
-    const accounts = await apiCall('/accounts');
+    const accounts = await apiCall(withUser('/accounts'));
     const select = document.getElementById('transactionAccount');
     const editSelect = document.getElementById('editTransactionAccount');
 
@@ -415,7 +705,7 @@ async function loadAccountsForSelect() {
 }
 
 async function loadCategoriesForSelect() {
-    const categories = await apiCall('/categories');
+    const categories = await apiCall(withUser('/categories'));
     const select = document.getElementById('transactionCategory');
     const editSelect = document.getElementById('editTransactionCategory');
 
@@ -609,7 +899,7 @@ async function deleteTransfer(transferId) {
 
 async function loadBudgets() {
     showLoading('budgets-list');
-    const budgets = await apiCall('/budgets');
+    const budgets = await apiCall(withUser('/budgets'));
     if (budgets) {
         displayBudgets(budgets);
     }
@@ -624,7 +914,7 @@ async function displayBudgets(budgets) {
         return;
     }
 
-    const categories = await apiCall('/categories');
+    const categories = await apiCall(withUser('/categories'));
     const categoryMap = {};
 
     if (categories) {
@@ -641,6 +931,11 @@ async function displayBudgets(budgets) {
             <p><strong>Категория:</strong> ${categoryMap[budget.category_id] || 'Неизвестно'}</p>
             <p><strong>Лимит:</strong> ${budget.amount_limit} ₽</p>
             <p><strong>Период:</strong> ${new Date(budget.period_start).toLocaleDateString('ru-RU')} - ${new Date(budget.period_end).toLocaleDateString('ru-RU')}</p>
+            <p><strong>Пользователь:</strong> ${getUserName(budget.user_id)}</p>
+            <div class="actions">
+                <button class="edit-btn" onclick="editBudget(${budget.id})">Редактировать</button>
+                <button class="delete-btn" onclick="deleteBudget(${budget.id})">Удалить</button>
+            </div>
         `;
         container.appendChild(budgetDiv);
     });
@@ -655,18 +950,31 @@ function hideBudgetForm() {
     document.getElementById('budgetForm').reset();
 }
 
+function hideBudgetEdit() {
+    document.getElementById('budget-edit').style.display = 'none';
+    document.getElementById('budgetEditForm').reset();
+}
+
 async function loadCategoriesForBudgetSelect() {
-    const categories = await apiCall('/categories');
+    const categories = await apiCall(withUser('/categories'));
     const select = document.getElementById('budgetCategory');
+    const editSelect = document.getElementById('editBudgetCategory');
 
     if (categories) {
         select.innerHTML = '<option value="">Выберите категорию</option>';
+        if (editSelect) editSelect.innerHTML = '<option value="">Выберите категорию</option>';
 
         categories.forEach(category => {
             const option = document.createElement('option');
             option.value = category.id;
             option.textContent = category.name;
             select.appendChild(option);
+            if (editSelect) {
+                const option2 = document.createElement('option');
+                option2.value = category.id;
+                option2.textContent = category.name;
+                editSelect.appendChild(option2);
+            }
         });
     }
 }
@@ -675,12 +983,17 @@ document.getElementById('budgetForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const formData = {
+        user_id: parseInt(document.getElementById('budgetUser').value),
         category_id: parseInt(document.getElementById('budgetCategory').value),
         amount_limit: parseFloat(document.getElementById('budgetAmount').value),
         period_start: document.getElementById('budgetStart').value,
         period_end: document.getElementById('budgetEnd').value
     };
 
+    if (!formData.user_id) {
+        showError('Выберите пользователя для бюджета');
+        return;
+    }
     const result = await apiCall('/budgets', 'POST', formData);
     if (result) {
         showSuccess('Бюджет создан успешно');
@@ -689,8 +1002,49 @@ document.getElementById('budgetForm').addEventListener('submit', async (e) => {
     }
 });
 
+async function editBudget(budgetId) {
+    const budgets = await apiCall(withUser('/budgets'));
+    const target = (budgets || []).find(b => b.id === budgetId);
+    if (!target) return;
+    await loadCategoriesForBudgetSelect();
+    document.getElementById('editBudgetId').value = target.id;
+    document.getElementById('editBudgetUser').value = target.user_id;
+    document.getElementById('editBudgetCategory').value = target.category_id;
+    document.getElementById('editBudgetAmount').value = target.amount_limit;
+    document.getElementById('editBudgetStart').value = target.period_start;
+    document.getElementById('editBudgetEnd').value = target.period_end;
+    document.getElementById('budget-edit').style.display = 'block';
+}
+
+document.getElementById('budgetEditForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const budgetId = document.getElementById('editBudgetId').value;
+    const formData = {
+        user_id: parseInt(document.getElementById('editBudgetUser').value),
+        category_id: parseInt(document.getElementById('editBudgetCategory').value),
+        amount_limit: parseFloat(document.getElementById('editBudgetAmount').value),
+        period_start: document.getElementById('editBudgetStart').value,
+        period_end: document.getElementById('editBudgetEnd').value
+    };
+    const result = await apiCall(`/budgets/${budgetId}`, 'PUT', formData);
+    if (result) {
+        showSuccess('Бюджет обновлен');
+        hideBudgetEdit();
+        loadBudgets();
+    }
+});
+
+async function deleteBudget(budgetId) {
+    if (!confirm('Удалить бюджет?')) return;
+    const result = await apiCall(`/budgets/${budgetId}`, 'DELETE');
+    if (result) {
+        showSuccess('Бюджет удален');
+        loadBudgets();
+    }
+}
+
 async function loadTransactionReport() {
-    const transactions = await apiCall('/reports/transactions');
+    const transactions = await apiCall(withUser('/reports/transactions'));
     if (transactions) {
         displayTransactionReport(transactions);
     }
@@ -737,7 +1091,7 @@ function displayTransactionReport(transactions) {
 }
 
 async function loadCategoryReport() {
-    const report = await apiCall('/reports/categories');
+    const report = await apiCall(withUser('/reports/categories'));
     if (report) {
         displayCategoryReport(report);
     }
@@ -773,6 +1127,84 @@ function displayCategoryReport(report) {
     });
 }
 
+async function loadLogs() {
+    showLoading('logs-list');
+    const tableFilter = document.getElementById('logTableFilter')?.value || '';
+    const limit = document.getElementById('logLimit')?.value || 100;
+
+    let endpoint = `/logs?limit=${limit}`;
+    if (tableFilter) {
+        endpoint += `&table_name=${tableFilter}`;
+    }
+
+    const logs = await apiCall(endpoint);
+    if (logs !== null) {
+        displayLogs(logs);
+    }
+}
+
+function displayLogs(logs) {
+    const container = document.getElementById('logs-list');
+    container.innerHTML = '';
+
+    if (logs.length === 0) {
+        container.innerHTML = '<p>Логи не найдены</p>';
+        return;
+    }
+
+    logs.forEach(log => {
+        const logDiv = document.createElement('div');
+        logDiv.className = 'list-item log-item';
+
+        // Определяем класс действия, избегая пустых строк
+        let actionClass = '';
+        if (log.action === 'DELETE') {
+            actionClass = 'log-warning';
+        } else if (log.action === 'INSERT') {
+            actionClass = 'log-success';
+        } else if (log.action === 'UPDATE') {
+            actionClass = 'log-info';
+        }
+
+        if (actionClass) {
+            logDiv.classList.add(actionClass);
+        }
+
+        // Безопасная обработка даты
+        const actionDate = log.action_date ? new Date(log.action_date).toLocaleString('ru-RU') : 'Не указана';
+
+        logDiv.innerHTML = `
+            <div class="log-header">
+                <h4>${log.action || 'Неизвестно'}</h4>
+                <span class="log-time">${actionDate}</span>
+            </div>
+            <p><strong>Таблица:</strong> ${log.table_name || 'Не указана'}</p>
+            <p><strong>ID записи:</strong> ${log.record_id || 'Не указан'}</p>
+            ${log.old_data ? `<p><strong>Старые данные:</strong> <pre class="log-data">${JSON.stringify(log.old_data, null, 2)}</pre></p>` : ''}
+            ${log.new_data ? `<p><strong>Новые данные:</strong> <pre class="log-data">${JSON.stringify(log.new_data, null, 2)}</pre></p>` : ''}
+        `;
+        container.appendChild(logDiv);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-    showSection('users');
+    const filter = document.getElementById('userFilter');
+    if (filter) {
+        filter.addEventListener('change', (e) => setSelectedUser(e.target.value));
+    }
+
+    const logTableFilter = document.getElementById('logTableFilter');
+    if (logTableFilter) {
+        logTableFilter.addEventListener('change', () => loadLogs());
+    }
+
+    const logLimit = document.getElementById('logLimit');
+    if (logLimit) {
+        logLimit.addEventListener('change', () => loadLogs());
+    }
+
+    // Загружаем текущую роль PostgreSQL
+    loadCurrentRole();
+
+    loadUsers().then(() => showSection('users'));
 });

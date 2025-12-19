@@ -6,9 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.database import SessionLocal
 
 from app.database import engine, Base
-from app.routers import users, accounts, categories, transactions, budgets, reports
+from app.routers import users, accounts, categories, transactions, budgets, reports, logs
 
 # Создание таблиц
 Base.metadata.create_all(bind=engine)
@@ -34,6 +36,7 @@ app.include_router(categories.router)
 app.include_router(transactions.router)
 app.include_router(budgets.router)
 app.include_router(reports.router)
+app.include_router(logs.router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -46,7 +49,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    # For dev purposes, provide a safe error message; in production, log the details and return a generic message
     return JSONResponse(
         status_code=500,
         content={"message": "Internal server error"},
@@ -55,10 +57,20 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.exception_handler(FastAPIHTTPException)
 async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
+    if exc.status_code == 403:
+        try:
+            from app.auth import get_current_db_role
+            db = SessionLocal()
+            role = get_current_db_role(db)
+            db.close()
+        except:
+            pass
+
     return JSONResponse(
         status_code=exc.status_code,
         content={"message": exc.detail},
     )
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
